@@ -939,6 +939,9 @@ fix_params({{sql_wchar, Max}, InOut, Values}) ->
 fix_params({{sql_wvarchar, Max}, InOut, Values}) ->
     NewValues = string_terminate(Values),
     {?USER_WVARCHAR, Max, fix_inout(InOut), NewValues};
+fix_params({{sql_guid, Max}, InOut, Values}) ->
+     NewValues = string_terminate(Values),
+    {?USER_GUID, Max, fix_inout(InOut), NewValues};
 fix_params({{sql_wlongvarchar, Max}, InOut, Values}) ->
     NewValues = string_terminate(Values),
     {?USER_WLONGVARCHAR, Max, fix_inout(InOut), NewValues};

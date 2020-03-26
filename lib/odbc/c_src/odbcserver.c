@@ -26,10 +26,10 @@
   database using the Microsoft ODBC API. The c-process is implemented
   using two threads the supervisor thread and the database handler thread.
   If the database thread should hang erlang can close the c-process down
-  by sendig a shutdown request to the supervisor thread.
+  by sending a shutdown request to the supervisor thread.
 
   Erlang will start this c-process as a port-program and send information
-  regarding inet-port nummbers through the erlang-port.
+  regarding inet-port numbers through the erlang-port.
   After that c-process will communicate via sockets with erlang. The
   reason for this is that some odbc-drivers do unexpected things with
   stdin/stdout messing up the erlang-port communication.
@@ -41,7 +41,7 @@
    Bytes, StringTerminator]
    
    CommandByte - constants between 0 and 255
-   identifing the request defined in odbc_internal.hrl and odbcserver.h
+   identifying the request defined in odbc_internal.hrl and odbcserver.h
 
    Bytes - How to interpret this sequence of bytes depends on the
    CommandByte.
@@ -89,9 +89,9 @@
    Parameters - [{Datatype, InOrOut, Value}]
    InOrOut = [ERL_ODBC_IN | ERL_ODBC_OUT | ERL_ODBC_INOUT]
    Datatype -  USER_INT | USER_SMALL_INT | {USER_DECIMAL, Precision, Scale} |
-   {USER_NMERIC, Precision, Scale} | {USER_CHAR, Max} | {USER_VARCHAR, Max} |
+   {USER_NUMERIC, Precision, Scale} | {USER_CHAR, Max} | {USER_VARCHAR, Max} |
    {USER_WVARCHAR, Max} | {USER_FLOAT, Precision} | USER_REAL | USER_DOUBLE |
-   USER_TIMESTAMP | {USER_WLONGVARCHAR, Max}
+   USER_TIMESTAMP | {USER_WLONGVARCHAR, Max} | USER_GUID
    Scale - integer
    Precision - integer
    Max - integer
@@ -666,12 +666,12 @@ static db_result_msg db_query(byte *sql, db_state *state)
 	do {
 	    ei_x_encode_list_header(&dynamic_buffer(state), 1);
 	    msg = encode_result(state);
-	    /* We don't want to continue if an error occured */
+	    /* We don't want to continue if an error occurred */
 	    if (msg.length != 0) { 
 		break;
 	    }
 	    msg = more_result_sets(state);
-	    /* We don't want to continue if an error occured */
+	    /* We don't want to continue if an error occurred */
 	    if (msg.length != 0) { 
 		break;
 	    }
@@ -1209,6 +1209,8 @@ static db_result_msg encode_out_params(db_state *state,
                   ei_x_encode_long(&dynamic_buffer(state), (long)(ts->minute));
                   ei_x_encode_long(&dynamic_buffer(state), (long)(ts->second));
                   break;
+
+
                 case SQL_C_CHAR:
 			if binary_strings(state) {
 				ei_x_encode_binary(&dynamic_buffer(state),
@@ -1220,11 +1222,19 @@ static db_result_msg encode_out_params(db_state *state,
 						   ((char*)values)+j*column.type.len);
 			}
 			break;
-                case SQL_C_WCHAR:
+
+            case SQL_C_GUID:
+                ei_x_encode_binary(&dynamic_buffer(state),
+                ((char*)values)+j*column.type.len,
+                (column.type.strlen_or_indptr_array[j]));
+            break;
+
+            case SQL_C_WCHAR:
 			ei_x_encode_binary(&dynamic_buffer(state),
 					   ((char*)values)+j*column.type.len,
 					   (column.type.strlen_or_indptr_array[j]));
 			break;
+
                 case SQL_C_SLONG:
                     ei_x_encode_long(&dynamic_buffer(state), ((SQLINTEGER*)values)[j]);
                     break;
@@ -1236,6 +1246,7 @@ static db_result_msg encode_out_params(db_state *state,
                     ei_x_encode_atom(&dynamic_buffer(state),
                                      ((byte*)values)[j]==TRUE?"true":"false");
                     break;
+
                 default:
                     ei_x_encode_atom(&dynamic_buffer(state), "error");
                     break;
@@ -1305,8 +1316,7 @@ static db_result_msg encode_column_name_list(SQLSMALLINT num_of_columns,
 				       &nullable)))
 	    DO_EXIT(EXIT_DESC);
 
-	if(sql_type == SQL_LONGVARCHAR || sql_type == SQL_LONGVARBINARY || sql_type == SQL_WLONGVARCHAR)
-	    size = MAXCOLSIZE;
+	if(sql_type == SQL_LONGVARCHAR || sql_type == SQL_LONGVARBINARY || sql_type == SQL_WLONGVARCHAR) size = MAXCOLSIZE;
     
 	(columns(state)[i]).type.decimal_digits = dec_digits;
 	(columns(state)[i]).type.sql = sql_type;
@@ -1321,7 +1331,7 @@ static db_result_msg encode_column_name_list(SQLSMALLINT num_of_columns,
 		    (char *)safe_malloc(columns(state)[i].type.len);
 	
 		if (columns(state)[i].type.c == SQL_C_BINARY) {
-		    /* retrived later by retrive_binary_data */
+		    /* retrieved later by retrive_binary_data */
 		} else {
 		    if(!sql_success(
 			SQLBindCol
@@ -1495,6 +1505,7 @@ static void encode_column_dyn(db_column column, int column_nr,
             ei_x_encode_ulong(&dynamic_buffer(state), ts->minute);
             ei_x_encode_ulong(&dynamic_buffer(state), ts->second);
             break;
+
 	case SQL_C_CHAR:
 		if binary_strings(state) {
 			 ei_x_encode_binary(&dynamic_buffer(state), 
@@ -1503,10 +1514,19 @@ static void encode_column_dyn(db_column column, int column_nr,
 			ei_x_encode_string(&dynamic_buffer(state), column.buffer);
 		}
 	    break;
+
+    case SQL_C_GUID:
+            ei_x_encode_binary(&dynamic_buffer(state),
+                               column.buffer,column.type.strlen_or_indptr);
+	    break;
+
 	case SQL_C_WCHAR:
             ei_x_encode_binary(&dynamic_buffer(state), 
                                column.buffer,column.type.strlen_or_indptr);
 	    break;
+
+
+
 	case SQL_C_SLONG:
 	    ei_x_encode_long(&dynamic_buffer(state),
 	    	*(SQLINTEGER*)column.buffer);
@@ -1549,11 +1569,19 @@ static void encode_data_type(SQLSMALLINT sql_type, SQLINTEGER size,
 	ei_x_encode_atom(&dynamic_buffer(state), "sql_varchar");
 	ei_x_encode_long(&dynamic_buffer(state), size);
 	break;
+
+	case SQL_GUID:
+	ei_x_encode_tuple_header(&dynamic_buffer(state), 2);
+	ei_x_encode_atom(&dynamic_buffer(state), "sql_guid");
+	ei_x_encode_long(&dynamic_buffer(state), size);
+    break;
+
     case SQL_WCHAR:
 	ei_x_encode_tuple_header(&dynamic_buffer(state), 2);	
 	ei_x_encode_atom(&dynamic_buffer(state), "sql_wchar");
 	ei_x_encode_long(&dynamic_buffer(state), size);
 	break;
+
     case SQL_WVARCHAR:
 	ei_x_encode_tuple_header(&dynamic_buffer(state), 2);	
 	ei_x_encode_atom(&dynamic_buffer(state), "sql_wvarchar");
@@ -1692,6 +1720,12 @@ static Boolean decode_params(db_state *state, byte *buffer, int *index, param_ar
 		    param->offset += param->type.len;
 	    }
 	    break;
+
+    case SQL_C_GUID:
+	    ei_decode_binary(buffer, index, &(param->values.string[param->offset]), &bin_size);
+	    param->offset += param->type.len;
+	    break;
+
     case SQL_C_WCHAR:
 	    ei_decode_binary(buffer, index, &(param->values.string[param->offset]), &bin_size);
 	    param->offset += param->type.len;
@@ -2052,7 +2086,7 @@ static void clean_socket_lib(void)
 }
     
 
-/*------------- Memmory handling funtions -------------------------------*/
+/*------------- Memory handling funtions -------------------------------*/
 static void *safe_malloc(int size)
 {
     void *memory;
@@ -2122,7 +2156,7 @@ static void free_params(param_array **params, int cols)
 }   
 
 /* Description: Frees resources associated with the current statement handle
-   keeped in the state.*/
+   kept in the state.*/
 static void clean_state(db_state *state)
 {
     if(statement_handle(state) != NULL) {
@@ -2277,6 +2311,8 @@ static void init_param_column(param_array *params, byte *buffer, int *index,
 				sizeof(byte)* params->type.len);
 	
 	break;
+
+	case USER_GUID:
     case USER_WCHAR:
     case USER_WVARCHAR:
     case USER_WLONGVARCHAR:
@@ -2285,6 +2321,8 @@ static void init_param_column(param_array *params, byte *buffer, int *index,
 		params->type.sql = SQL_WCHAR; break;
 	    case USER_WVARCHAR:
 		params->type.sql = SQL_WVARCHAR; break;
+		case USER_GUID:
+		params->type.sql = SQL_GUID; break;
 	    default:
 		params->type.sql = SQL_WLONGVARCHAR; break;
 	}
@@ -2450,6 +2488,13 @@ static db_result_msg map_sql_2_c_column(db_column* column, db_state *state)
         column -> type.c = SQL_C_CHAR;
         column -> type.strlen_or_indptr = SQL_NTS;
         break;
+
+    case SQL_GUID:
+        column->type.len = (column -> type.col_size + 1)*sizeof(SQLWCHAR);
+        column->type.c = SQL_C_WCHAR;
+        column->type.strlen_or_indptr = SQL_NTS;
+    break;
+
     case SQL_WCHAR:
     case SQL_WVARCHAR:
     case SQL_WLONGVARCHAR:

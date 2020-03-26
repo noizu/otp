@@ -110,6 +110,7 @@
       {sql_wchar, size()} |
       {sql_varchar, size()} |
       {sql_wvarchar, size()}|
+      {sql_guid, size()} |
       {sql_float, precision()} |
       {sql_wlongvarchar, size()} |
       {sql_float, precision()} |
