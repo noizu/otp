@@ -1,5 +1,8 @@
 # Match at any level.
 
+# Intellij
+.idea
+
 # emacs
 *~
 lib/tools/emacs/*.elc
